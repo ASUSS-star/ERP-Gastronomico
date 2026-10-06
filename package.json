@@ -1,0 +1,24 @@
+{
+  "name": "erp-gastron-mico-",
+  "version": "1.0.0",
+  "description": "Este es un sistema esta basado en JS, HTML, CSS y PotgreSQL",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ASUSS-star/ERP-Gastron-mico-.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ASUSS-star/ERP-Gastron-mico-/issues"
+  },
+  "homepage": "https://github.com/ASUSS-star/ERP-Gastron-mico-#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
