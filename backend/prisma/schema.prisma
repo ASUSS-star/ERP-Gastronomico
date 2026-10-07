@@ -1,0 +1,270 @@
+// =============================================================
+//  ERP Gastronómico — Esquema de base de datos (PostgreSQL / Supabase)
+//  Arquitectura multi-restaurante (multi-tenant):
+//  cada tabla de negocio tiene `restauranteId` y TODA consulta se
+//  filtra por el restaurante del usuario autenticado (viene en el JWT).
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Supabase: conexión por el pooler (puerto 6543, ?pgbouncer=true) para la app
+  url       = env("DATABASE_URL")
+  // Supabase: conexión directa (puerto 5432) para migraciones
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------- Enums ----------------------
+
+enum Rol {
+  ADMIN
+  MESERO
+  COCINERO
+  CAJERO
+}
+
+enum EstadoComanda {
+  PENDIENTE
+  EN_PREPARACION
+  ENTREGADO
+  PAGADO
+  CANCELADO
+}
+
+enum EstadoMesa {
+  LIBRE
+  OCUPADA
+  INACTIVA
+}
+
+enum MetodoPago {
+  EFECTIVO
+  TARJETA
+  TRANSFERENCIA
+}
+
+enum TipoMovimiento {
+  ENTRADA // compra a proveedor
+  SALIDA  // consumo por comanda o merma
+  AJUSTE  // inventario físico
+}
+
+// ---------------------- Tenant ----------------------
+
+model Restaurante {
+  id          Int      @id @default(autoincrement())
+  nombre      String   @db.VarChar(120)
+  slug        String   @unique @db.VarChar(140)
+  telefono    String?  @db.VarChar(20)
+  direccion   String?  @db.VarChar(255)
+  activo      Boolean  @default(true)
+  // Contador atómico para el folio consecutivo de comandas por restaurante
+  ultimoFolio Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  usuarios    Usuario[]
+  mesas       Mesa[]
+  categorias  Categoria[]
+  platillos   Platillo[]
+  insumos     Insumo[]
+  proveedores Proveedor[]
+  comandas    Comanda[]
+
+  @@map("restaurantes")
+}
+
+// ---------------------- Usuarios ----------------------
+
+model Usuario {
+  id            Int      @id @default(autoincrement())
+  restauranteId Int
+  nombre        String   @db.VarChar(100)
+  email         String   @unique @db.VarChar(150)
+  password      String   @db.VarChar(255) // hash bcrypt, nunca texto plano
+  rol           Rol      @default(MESERO)
+  activo        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurante   Restaurante           @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  comandas      Comanda[]
+  movimientos   MovimientoInventario[]
+
+  @@index([restauranteId, rol])
+  @@map("usuarios")
+}
+
+// ---------------------- Salón ----------------------
+
+model Mesa {
+  id            Int        @id @default(autoincrement())
+  restauranteId Int
+  numero        Int
+  capacidad     Int        @default(4)
+  estado        EstadoMesa @default(LIBRE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  comandas      Comanda[]
+
+  @@unique([restauranteId, numero])
+  @@map("mesas")
+}
+
+// ---------------------- Menú ----------------------
+
+model Categoria {
+  id            Int      @id @default(autoincrement())
+  restauranteId Int
+  nombre        String   @db.VarChar(80)
+  createdAt     DateTime @default(now())
+
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  platillos     Platillo[]
+
+  @@unique([restauranteId, nombre])
+  @@map("categorias")
+}
+
+model Platillo {
+  id            Int      @id @default(autoincrement())
+  restauranteId Int
+  categoriaId   Int?
+  nombre        String   @db.VarChar(120)
+  descripcion   String?  @db.VarChar(500)
+  precio        Decimal  @db.Decimal(10, 2)
+  imagenUrl     String?  @db.VarChar(500)
+  disponible    Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  categoria     Categoria?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  receta        RecetaInsumo[]
+  detalles      DetalleComanda[]
+
+  @@unique([restauranteId, nombre])
+  @@map("platillos")
+}
+
+// Receta: cuántos insumos consume 1 unidad del platillo (para descontar stock)
+model RecetaInsumo {
+  platilloId Int
+  insumoId   Int
+  cantidad   Decimal @db.Decimal(10, 3)
+
+  platillo   Platillo @relation(fields: [platilloId], references: [id], onDelete: Cascade)
+  insumo     Insumo   @relation(fields: [insumoId], references: [id], onDelete: NoAction)
+
+  @@id([platilloId, insumoId])
+  @@map("recetas_insumos")
+}
+
+// ---------------------- Inventario ----------------------
+
+model Proveedor {
+  id            Int      @id @default(autoincrement())
+  restauranteId Int
+  nombre        String   @db.VarChar(120)
+  contacto      String?  @db.VarChar(100)
+  telefono      String?  @db.VarChar(20)
+  email         String?  @db.VarChar(150)
+  activo        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  insumos       Insumo[]
+
+  @@unique([restauranteId, nombre])
+  @@map("proveedores")
+}
+
+model Insumo {
+  id            Int      @id @default(autoincrement())
+  restauranteId Int
+  proveedorId   Int?
+  nombre        String   @db.VarChar(120)
+  unidad        String   @db.VarChar(20) // kg, lt, pza, gr...
+  stockActual   Decimal  @default(0) @db.Decimal(12, 3)
+  stockMinimo   Decimal  @default(0) @db.Decimal(12, 3)
+  costoUnitario Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  proveedor     Proveedor?  @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  recetas       RecetaInsumo[]
+  movimientos   MovimientoInventario[]
+
+  @@unique([restauranteId, nombre])
+  @@map("insumos")
+}
+
+model MovimientoInventario {
+  id         Int            @id @default(autoincrement())
+  insumoId   Int
+  usuarioId  Int?
+  comandaId  Int?
+  tipo       TipoMovimiento
+  cantidad   Decimal        @db.Decimal(12, 3) // siempre positiva; el tipo indica el sentido
+  stockFinal Decimal        @db.Decimal(12, 3) // stock resultante (auditoría)
+  motivo     String?        @db.VarChar(255)
+  createdAt  DateTime       @default(now())
+
+  insumo     Insumo   @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+  usuario    Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  comanda    Comanda? @relation(fields: [comandaId], references: [id], onDelete: SetNull)
+
+  @@index([insumoId, createdAt])
+  @@map("movimientos_inventario")
+}
+
+// ---------------------- Comandas ----------------------
+
+model Comanda {
+  id            Int           @id @default(autoincrement())
+  restauranteId Int
+  folio         Int
+  mesaId        Int
+  meseroId      Int
+  estado        EstadoComanda @default(PENDIENTE)
+  notas         String?       @db.VarChar(500)
+  total         Decimal       @default(0) @db.Decimal(10, 2)
+  metodoPago    MetodoPago?
+  pagadoAt      DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  mesa          Mesa        @relation(fields: [mesaId], references: [id], onDelete: NoAction)
+  mesero        Usuario     @relation(fields: [meseroId], references: [id], onDelete: NoAction)
+  detalles      DetalleComanda[]
+  movimientos   MovimientoInventario[]
+
+  @@unique([restauranteId, folio])
+  @@index([restauranteId, estado])
+  @@index([mesaId])
+  @@index([meseroId])
+  @@map("comandas")
+}
+
+model DetalleComanda {
+  id             Int     @id @default(autoincrement())
+  comandaId      Int
+  platilloId     Int
+  cantidad       Int
+  precioUnitario Decimal @db.Decimal(10, 2) // precio congelado al momento de pedir
+  subtotal       Decimal @db.Decimal(10, 2)
+  notas          String? @db.VarChar(255) // "sin cebolla"
+
+  comanda        Comanda  @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+  platillo       Platillo @relation(fields: [platilloId], references: [id], onDelete: NoAction)
+
+  @@map("detalles_comanda")
+}
