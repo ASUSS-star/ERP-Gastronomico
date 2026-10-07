@@ -7,8 +7,8 @@ router.get('/health', (_req, res) => res.json({ ok: true, servicio: 'ERP Gastron
 
 // Descomenta cada línea cuando agregues su módulo:
 // --- Módulo de Usuarios y Autenticación ---
-// router.use('/auth', require('./auth.routes'));
-// router.use('/usuarios', require('./usuarios.routes'));
+router.use('/auth', require('./auth.routes'));
+router.use('/usuarios', require('./usuarios.routes'));
 // --- Módulo de Gestión de Pedidos/Comandas ---
 // router.use('/mesas', require('./mesas.routes'));
 // router.use('/comandas', require('./comandas.routes'));
