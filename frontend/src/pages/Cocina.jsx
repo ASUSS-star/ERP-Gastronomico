@@ -1,48 +1,65 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { comandasApi } from '../api/services';
+import { useFetch } from '../hooks/useFetch';
+import EstadoVista from '../components/ui/EstadoVista';
+import ComandaCard from '../components/ui/ComandaCard';
+import { SkeletonComandas } from '../components/skeletons/Skeleton';
 
-/** Pantalla de cocina (KDS): comandas pendientes y en preparación, se refresca cada 10 s. */
+/** KDS: pendientes y en preparación, refresco cada 10 s. */
 export default function Cocina() {
-  const [comandas, setComandas] = useState([]);
-  const [error, setError] = useState('');
-
-  const cargar = () =>
-    comandasApi.listar({ estado: 'PENDIENTE,EN_PREPARACION', limit: 50 }).then((res) => setComandas(res.data));
-
-  useEffect(() => {
-    cargar();
-    const id = setInterval(cargar, 10000);
-    return () => clearInterval(id);
-  }, []);
+  const { data, loading, error, recargar } = useFetch(
+    () => comandasApi.listar({ estado: 'PENDIENTE,EN_PREPARACION', limit: 50 }).then((r) => r.data),
+    { intervalo: 10000 },
+  );
+  const [errorAccion, setErrorAccion] = useState('');
+  const [enCurso, setEnCurso] = useState(null);
 
   const avanzar = async (c) => {
     const siguiente = c.estado === 'PENDIENTE' ? 'EN_PREPARACION' : 'ENTREGADO';
+    setEnCurso(c.id);
+    setErrorAccion('');
     try {
       await comandasApi.cambiarEstado(c.id, siguiente);
-      cargar();
+      await recargar();
     } catch (err) {
-      setError(err.mensaje);
+      setErrorAccion(err.mensaje);
+    } finally {
+      setEnCurso(null);
     }
   };
 
+  const lista = data ?? [];
+  const columnas = [
+    { titulo: 'Pendientes', estado: 'PENDIENTE', accion: 'Empezar' },
+    { titulo: 'En preparación', estado: 'EN_PREPARACION', accion: 'Marcar entregado' },
+  ];
+
   return (
     <>
-      <h1>Cocina</h1>
-      {error && <p className="error">{error}</p>}
-      <div className="grid">
-        {comandas.map((c) => (
-          <div key={c.id} className="card">
-            <h3>#{c.folio} · Mesa {c.mesa.numero}</h3>
-            <small>{c.estado} · {c.mesero.nombre}</small>
-            <ul>
-              {c.detalles.map((d) => (
-                <li key={d.id}>{d.cantidad}× {d.platillo.nombre} {d.notas && <em>({d.notas})</em>}</li>
+      {errorAccion && <p role="alert" className="badge badge-err">{errorAccion}</p>}
+      <EstadoVista
+        loading={loading}
+        error={error}
+        vacio={lista.length === 0}
+        skeleton={<SkeletonComandas />}
+        onReintentar={recargar}
+        tituloVacio="Sin comandas activas"
+        textoVacio="Las nuevas comandas aparecerán aquí automáticamente."
+      >
+        <div className="tablero" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+          {columnas.map((col) => (
+            <section key={col.estado} style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
+              <h2 style={{ margin: 0 }}>
+                {col.titulo} ({lista.filter((c) => c.estado === col.estado).length})
+              </h2>
+              {lista.filter((c) => c.estado === col.estado).map((c) => (
+                <ComandaCard key={c.id} comanda={c} accion={col.accion}
+                  onAccion={avanzar} cargando={enCurso === c.id} />
               ))}
-            </ul>
-            <button onClick={() => avanzar(c)}>{c.estado === 'PENDIENTE' ? 'Empezar' : 'Marcar entregado'}</button>
-          </div>
-        ))}
-      </div>
+            </section>
+          ))}
+        </div>
+      </EstadoVista>
     </>
   );
 }

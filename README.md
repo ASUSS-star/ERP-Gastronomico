@@ -89,6 +89,7 @@ erp-gastronomico/
 │       ├── ERP_Gastronomico.postman_collection.json   (64 peticiones con tests)
 │       └── ERP_Gastronomico.postman_environment.json
 ├── backend/
+│   ├── node_modules/
 │   ├── .env.example              ← plantilla de variables de entorno
 │   ├── package.json
 │   ├── prisma/
@@ -108,15 +109,29 @@ erp-gastronomico/
 │   │   └── utils/                ← AppError, jwt, respuestas, slug
 │   └── tests/
 │       └── api.test.js           ← 34 pruebas de integración (edge cases)
-└── frontend/                     ← React + Vite (base lista para la Fase 3)
+└── frontend/                     ← React + Vite
+    ├── node_modules/
+    ├── public/
+    │   ├── _redirects
     ├── .env.example
+    ├── index.html
+    ├── package-lock.json
     ├── package.json
     ├── vite.config.js
     └── src/
-        ├── api/                  ← client.js (axios + JWT) · services.js
-        ├── context/              ← AuthContext (sesión)
-        ├── components/           ← RutaProtegida, Layout
-        └── pages/                ← Login, Inicio (salón), Cocina, Caja
+        ├── api/
+        │   ├── client.js
+        │   └── services.js                  
+        ├── context/
+        │   └── AuthContext.jsx
+        ├── components/
+        │   ├── Layout.jsx
+        │   └── RutaProtegida.jsx
+        └── pages/
+            ├── Caja.jsx                  
+            ├── Cocina.jsx             
+            ├── Inicio.jsx         
+            └── Login.jsx
 ```
 
 ## 🗃️ Modelo de datos
