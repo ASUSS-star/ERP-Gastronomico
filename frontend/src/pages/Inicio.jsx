@@ -1,25 +1,11 @@
-import { useEffect, useState } from 'react';
-import { mesasApi } from '../api/services';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import Dashboard from './Dashboard';
 
-/** Vista de mesas (estado del salón). Punto de partida para la toma de pedidos del mesero. */
+/** Página de inicio según el rol: cada quien aterriza en su pantalla de trabajo. */
 export default function Inicio() {
-  const [mesas, setMesas] = useState([]);
-  useEffect(() => {
-    mesasApi.listar().then((res) => setMesas(res.data));
-  }, []);
-
-  return (
-    <>
-      <h1>Salón</h1>
-      <div className="grid">
-        {mesas.map((m) => (
-          <div key={m.id} className={`card mesa ${m.estado.toLowerCase()}`}>
-            <h3>Mesa {m.numero}</h3>
-            <p>{m.estado} · {m.capacidad} personas</p>
-            <small>{m._count?.comandas || 0} comandas abiertas</small>
-          </div>
-        ))}
-      </div>
-    </>
-  );
+  const { usuario } = useAuth();
+  if (usuario.rol === 'MESERO') return <Navigate to="/salon" replace />;
+  if (usuario.rol === 'COCINERO') return <Navigate to="/cocina" replace />;
+  return <Dashboard />; // ADMIN y CAJERO
 }

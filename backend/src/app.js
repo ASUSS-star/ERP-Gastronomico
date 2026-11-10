@@ -14,6 +14,8 @@ const app = express();
 
 // --- Seguridad y utilidades ---
 app.disable('x-powered-by');
+// En Vercel/Render la app vive detrás de un proxy: sin esto el rate-limit vería una sola IP para todos
+app.set('trust proxy', 1);
 app.use(helmet()); // cabeceras HTTP seguras
 app.use(cors({ origin: env.corsOrigin, credentials: true }));
 app.use(express.json({ limit: '100kb' })); // limita el tamaño del body

@@ -1,5 +1,3 @@
-import '../../styles/tokens.css';
-
 const MAPA = {
   PENDIENTE: ['badge-warn', 'Pendiente'],
   EN_PREPARACION: ['badge-info', 'En preparación'],
@@ -7,6 +5,8 @@ const MAPA = {
   PAGADO: ['badge-ok', 'Pagado'],
   CANCELADO: ['badge-err', 'Cancelado'],
 };
+
+export const textoEstado = (estado) => MAPA[estado]?.[1] ?? estado;
 
 export default function EstadoBadge({ estado }) {
   const [clase, texto] = MAPA[estado] ?? ['badge-info', estado];

@@ -95,7 +95,8 @@ erp-gastronomico/
 │   ├── prisma/
 │   │   ├── schema.prisma         ← MODELOS / tablas
 │   │   ├── migrations/           ← (se genera con npm run db:migrate)
-│   │   └── seed.js               ← datos iniciales: restaurantes, usuarios, menú, inventario, comandas
+│   │   ├── datos/                ← restaurante.ejemplo.json (plantilla) · restaurante.json (tus datos, fuera de Git)
+│   │   └── seed.js               ← carga los datos reales del restaurante desde datos/restaurante.json
 │   ├── src/
 │   │   ├── server.js             ← levanta el servidor
 │   │   ├── app.js                ← configura Express (middlewares + rutas)
@@ -201,22 +202,22 @@ npx prisma migrate dev --name init
 
 Esto crea `prisma/migrations/…_init/migration.sql`, ejecuta el SQL en Supabase y genera el Prisma Client. Ya puedes ver las tablas en Supabase → **Table Editor**. **Sube la carpeta `migrations/` a Git** (es parte del entregable).
 
-### Paso 5 — Poblar con datos de prueba (seeder)
+### Paso 5 — Cargar los datos reales del restaurante (seeder)
 
 ```bash
+cp prisma/datos/restaurante.ejemplo.json prisma/datos/restaurante.json   # PowerShell: copy ...
+# edita prisma/datos/restaurante.json con tus datos y luego:
 npm run db:seed
 ```
 
-Crea 2 restaurantes, 8 mesas, 5 categorías, 10 platillos con receta, 4 proveedores, 13 insumos y 3 comandas en distintos estados. Usuarios (contraseña `Password123!`):
+`restaurante.json` (ignorado por Git, porque trae contraseñas iniciales) define el restaurante, su personal, mesas, proveedores, insumos, categorías y platillos con receta. El seed valida el archivo y te lista todo lo que falte antes de tocar la base de datos.
 
-| Restaurante | Rol | Email |
-|---|---|---|
-| La Huerta Cocina Mexicana | ADMIN | `admin@lahuerta.com` |
-| La Huerta Cocina Mexicana | MESERO | `mesero@lahuerta.com` |
-| La Huerta Cocina Mexicana | MESERO | `mesero2@lahuerta.com` |
-| La Huerta Cocina Mexicana | COCINERO | `cocinero@lahuerta.com` |
-| La Huerta Cocina Mexicana | CAJERO | `cajero@lahuerta.com` |
-| Tacos El Güero | ADMIN | `admin@elguero.com` (para probar aislamiento) |
+- Elimina los restaurantes de demostración antiguos (*La Huerta*, *Tacos El Güero*) si todavía existen.
+- **No crea comandas ni ventas ficticias**: el historial empieza vacío.
+- Si el restaurante ya existe no lo modifica. Para borrarlo (con sus ventas) y recargarlo: `npm run db:seed:reiniciar`.
+- Cada usuario entra con el `email` y `password` que pusiste en el archivo. Roles válidos: `ADMIN`, `MESERO`, `COCINERO`, `CAJERO`.
+
+> Otra opción sin seed: abre `/registro` en el frontend, registra el restaurante y captura todo desde las pantallas de administración.
 
 ### Paso 6 — Levantar el servidor
 
@@ -397,8 +398,6 @@ Ver [Paso 7](#paso-7--probar-con-postman). La carpeta **7. Seguridad** contiene 
 
 ## ⚛️ Frontend (React + Vite) paso a paso
 
-La carpeta `frontend/` ya trae una base funcional: login, sesión con JWT, rutas protegidas por rol, vista de salón (mesas), pantalla de cocina y caja.
-
 ```bash
 cd frontend
 npm install
@@ -406,37 +405,42 @@ cp .env.example .env     # VITE_API_URL=http://localhost:4000/api
 npm run dev              # http://localhost:5173
 ```
 
-Inicia sesión con `admin@lahuerta.com` / `Password123!`. Con `cocinero@…` sólo verás "Cocina"; con `cajero@…`, "Caja".
+| Pantalla | Ruta | Roles | Qué hace |
+|---|---|---|---|
+| Iniciar sesión / Registro | `/login`, `/registro` | Público | Acceso y alta de un restaurante nuevo con su ADMIN |
+| Panel | `/` | ADMIN, CAJERO | Ventas, ticket promedio, top platillos, métodos de pago, stock bajo (hoy / 7 / 30 días) |
+| Salón y pedidos | `/salon` | ADMIN, MESERO | Mesas, toma de pedido, comandas abiertas (entregar / cancelar) |
+| Cocina | `/cocina` | ADMIN, COCINERO | Tablero de comandas pendientes y en preparación |
+| Caja | `/caja` | ADMIN, CAJERO | Cobro de comandas entregadas |
+| Menú y recetas | `/menu` | ADMIN | Categorías, platillos, disponibilidad y receta (costo por porción) |
+| Inventario | `/inventario` | ADMIN, COCINERO | Insumos, movimientos, kardex y proveedores |
+| Personal | `/personal` | ADMIN | Alta, edición y baja de empleados |
+
+Al entrar, cada rol aterriza en su pantalla: MESERO → Salón, COCINERO → Cocina, ADMIN y CAJERO → Panel.
 
 **Cómo está conectado:**
 
 1. `src/api/client.js` → instancia de Axios que agrega `Authorization: Bearer <token>` en cada petición y, si la API responde 401, cierra sesión.
 2. `src/api/services.js` → una función por endpoint (`comandasApi.crear(...)`). Los componentes nunca escriben URLs.
-3. `src/context/AuthContext.jsx` → guarda el usuario y expone `login()` / `logout()`.
+3. `src/context/AuthContext.jsx` → guarda el usuario y expone `login()` / `registrar()` / `logout()`.
 4. `src/components/RutaProtegida.jsx` → oculta páginas según el rol (sólo UX: **la seguridad real está en el backend**).
-
-**Siguientes pantallas sugeridas para la Fase 3:**
-
-| Pantalla | Rol | Endpoints |
-|---|---|---|
-| Registro de restaurante | Público | `POST /auth/registro` |
-| Tomar pedido (mesa → platillos → enviar) | MESERO | `GET /platillos`, `POST /comandas` |
-| Administración de menú y recetas | ADMIN | `/categorias`, `/platillos`, `PUT /platillos/:id/receta` |
-| Inventario y kardex | ADMIN, COCINERO | `/insumos`, `/insumos/:id/movimientos`, `/insumos/alertas/stock-bajo` |
-| Personal | ADMIN | `/usuarios` |
-| Dashboard | ADMIN, CAJERO | `GET /reportes/resumen` |
+5. `src/styles/tokens.css` (variables, botones, formularios) y `src/styles/app.css` (layout y pantallas). Tema claro/oscuro con `useTema()`.
 
 Para agregar una pantalla: crea el archivo en `src/pages/`, agrega la función en `services.js`, registra la ruta en `App.jsx` y el enlace en `Layout.jsx`.
 
 ## ☁️ Despliegue
 
-| Parte | Servicio sugerido (plan gratis) | Notas |
+| Parte | Servicio | Configuración |
 |---|---|---|
-| BD | Supabase | Ya está en la nube |
-| Backend | Render / Railway | Build: `npm install && npx prisma generate && npx prisma migrate deploy` · Start: `npm start` · Configura las variables del `.env` en el panel |
-| Frontend | Netlify / Vercel | Build: `npm run build` · Publish: `dist` · Variable `VITE_API_URL` con la URL del backend · agrega la URL del frontend a `CORS_ORIGIN` del backend |
+| BD | Supabase | Ya está en la nube. Aplica migraciones con `npm run db:deploy` desde tu equipo |
+| Backend | **Vercel** | Root Directory: `backend` · Framework: Express (lo detecta en `src/app.js`) · variables: `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `NODE_ENV=production` |
+| Frontend | **Netlify** | Lee `netlify.toml` (base `frontend`, build `npm run build`, publish `dist`) · variable: `VITE_API_URL=https://TU-BACKEND.vercel.app/api` |
 
-El archivo `frontend/public/_redirects` ya incluye la regla para que Netlify sirva las rutas de React Router.
+Orden: 1) backend en Vercel → copia su URL; 2) frontend en Netlify con `VITE_API_URL`; 3) pon la URL de Netlify (sin diagonal final) en `CORS_ORIGIN` de Vercel y vuelve a desplegar.
+
+- `postinstall: prisma generate` y `binaryTargets` en `schema.prisma` hacen que Prisma funcione en las funciones de Vercel.
+- `DATABASE_URL` debe ser la del *Transaction pooler* de Supabase (puerto 6543, `?pgbouncer=true&connection_limit=1`).
+- `VITE_API_URL` se incrusta al compilar: si la cambias, vuelve a desplegar en Netlify.
 
 ## 🤝 Trabajo en equipo con Git
 

@@ -20,7 +20,7 @@ export default function Cocina() {
     setErrorAccion('');
     try {
       await comandasApi.cambiarEstado(c.id, siguiente);
-      await recargar();
+      await recargar(true);
     } catch (err) {
       setErrorAccion(err.mensaje);
     } finally {
