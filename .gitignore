@@ -7,3 +7,10 @@ coverage/
 *.log
 .DS_Store
 .vscode/
+
+# Datos reales del restaurante para el seed (contiene contraseñas iniciales)
+backend/prisma/datos/restaurante.json
+# Netlify / Vercel
+.netlify/
+.vercel/
+backend/prisma/datos/restaurante.respaldo.json

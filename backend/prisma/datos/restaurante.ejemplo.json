@@ -1,0 +1,41 @@
+{
+  "restaurante": {
+    "nombre": "REEMPLAZA: nombre comercial del restaurante",
+    "telefono": "REEMPLAZA: teléfono a 10 dígitos",
+    "direccion": "REEMPLAZA: calle, número, colonia, municipio, estado"
+  },
+
+  "usuarios": [
+    { "nombre": "REEMPLAZA: nombre del dueño o gerente", "email": "REEMPLAZA@correo.com", "rol": "ADMIN",    "password": "REEMPLAZA: 8+ caracteres, letra y número" },
+    { "nombre": "REEMPLAZA: nombre del mesero",          "email": "REEMPLAZA@correo.com", "rol": "MESERO",   "password": "REEMPLAZA" },
+    { "nombre": "REEMPLAZA: nombre del cocinero",        "email": "REEMPLAZA@correo.com", "rol": "COCINERO", "password": "REEMPLAZA" },
+    { "nombre": "REEMPLAZA: nombre del cajero",          "email": "REEMPLAZA@correo.com", "rol": "CAJERO",   "password": "REEMPLAZA" }
+  ],
+
+  "mesas": [
+    { "numero": 1, "capacidad": 4 },
+    { "numero": 2, "capacidad": 4 }
+  ],
+
+  "proveedores": [
+    { "nombre": "REEMPLAZA: nombre del proveedor", "contacto": "REEMPLAZA: persona de contacto", "telefono": "REEMPLAZA", "email": "" }
+  ],
+
+  "insumos": [
+    { "nombre": "REEMPLAZA: nombre del insumo", "unidad": "kg", "stock": 0, "minimo": 0, "costo": 0, "proveedor": "REEMPLAZA: nombre del proveedor" }
+  ],
+
+  "categorias": ["REEMPLAZA: categoría del menú"],
+
+  "platillos": [
+    {
+      "nombre": "REEMPLAZA: nombre del platillo",
+      "categoria": "REEMPLAZA: categoría del menú",
+      "precio": 1,
+      "descripcion": "REEMPLAZA: descripción corta (opcional)",
+      "receta": [
+        { "insumo": "REEMPLAZA: nombre del insumo", "cantidad": 1 }
+      ]
+    }
+  ]
+}

@@ -18,19 +18,25 @@ export function AuthProvider({ children }) {
       .finally(() => setCargando(false));
   }, []);
 
-  const login = async (email, password) => {
-    const res = await authApi.login(email, password);
-    localStorage.setItem(TOKEN_KEY, res.data.token);
-    setUsuario({ ...res.data.usuario, restaurante: res.data.restaurante });
-    return res.data.usuario;
+  const iniciar = (data) => {
+    localStorage.setItem(TOKEN_KEY, data.token);
+    setUsuario({ ...data.usuario, restaurante: data.restaurante });
+    return data.usuario;
   };
+
+  const login = async (email, password) => iniciar((await authApi.login(email, password)).data);
+
+  /** Alta de un restaurante nuevo: crea el restaurante + su ADMIN y deja la sesión iniciada. */
+  const registrar = async (payload) => iniciar((await authApi.registro(payload)).data);
 
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
     setUsuario(null);
   };
 
-  return <AuthContext.Provider value={{ usuario, cargando, login, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ usuario, cargando, login, registrar, logout }}>{children}</AuthContext.Provider>
+  );
 }
 
 export const useAuth = () => useContext(AuthContext);

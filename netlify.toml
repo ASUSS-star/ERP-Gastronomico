@@ -1,0 +1,15 @@
+# Despliegue del FRONTEND en Netlify.
+# En el panel de Netlify sólo falta definir la variable VITE_API_URL (URL del backend en Vercel + /api).
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# React Router: cualquier ruta devuelve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
