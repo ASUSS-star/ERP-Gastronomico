@@ -1,7 +1,7 @@
 const prisma = require('../config/prisma');
 const AppError = require('../utils/AppError');
 
-const ESTADOS_ABIERTOS = ['PENDIENTE', 'EN_PREPARACION', 'ENTREGADO'];
+const ESTADOS_ABIERTOS = ['PENDIENTE', 'EN_PREPARACION', 'LISTO', 'ENTREGADO'];
 
 const listar = (restauranteId, { estado }) =>
   prisma.mesa.findMany({

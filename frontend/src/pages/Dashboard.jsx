@@ -15,7 +15,7 @@ const RANGOS = [
   { id: '30', texto: '30 días', dias: 29 },
 ];
 const METODOS = { EFECTIVO: 'Efectivo', TARJETA: 'Tarjeta', TRANSFERENCIA: 'Transferencia' };
-const ESTADOS = ['PENDIENTE', 'EN_PREPARACION', 'ENTREGADO', 'PAGADO', 'CANCELADO'];
+const ESTADOS = ['PENDIENTE', 'EN_PREPARACION', 'LISTO', 'ENTREGADO', 'PAGADO', 'CANCELADO'];
 
 /** Medianoche LOCAL de hace N días (el servidor en la nube trabaja en UTC, por eso se manda explícito). */
 const desdeHace = (dias) => {
@@ -42,10 +42,10 @@ export default function Dashboard() {
 
   const { data, loading, error, recargar } = useFetch(
     () => reportesApi.resumen({ desde: desdeHace(dias) }).then((r) => r.data),
-    { deps: [rango], intervalo: 30000 },
+    { deps: [rango], intervalo: 30000, escuchar: ['reportes', 'mesas', 'inventario'] },
   );
   // El detalle de stock bajo sólo lo puede consultar ADMIN / COCINERO
-  const alertas = useFetch(() => (esAdmin ? insumosApi.alertas().then((r) => r.data) : Promise.resolve([])));
+  const alertas = useFetch(() => (esAdmin ? insumosApi.alertas().then((r) => r.data) : Promise.resolve([])), { escuchar: ['inventario'] });
 
   const top = data?.topPlatillos ?? [];
   const maxTop = Math.max(1, ...top.map((t) => Number(t.cantidad)));
@@ -101,7 +101,7 @@ export default function Dashboard() {
                     <div className="barras">
                       {metodos.map((m) => (
                         <div className="barra-fila" key={m.metodo}>
-                          <header><span>{METODOS[m.metodo] ?? m.metodo}</span><span className="num">{dinero(m.total)} · {m.comandas}</span></header>
+                          <header><span>{METODOS[m.metodo] ?? m.metodo}</span><span className="num">{dinero(m.total)} · {m.pagos ?? m.comandas} {(m.pagos ?? m.comandas) === 1 ? 'pago' : 'pagos'}</span></header>
                           <div className="barra"><i style={{ width: `${totalVentas ? (Number(m.total) / totalVentas) * 100 : 0}%` }} /></div>
                         </div>
                       ))}

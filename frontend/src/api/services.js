@@ -1,5 +1,6 @@
 /** Funciones por módulo: los componentes nunca escriben URLs a mano. */
 import api from './client';
+import { mutar, nuevoId } from '../offline/cola';
 
 /** CRUD genérico para recursos REST simples. */
 const crud = (base) => ({
@@ -34,10 +35,17 @@ export const insumosApi = {
   registrarMovimiento: (id, payload) => api.post(`/insumos/${id}/movimientos`, payload),
 };
 
+// Crear, cambiar estado y cobrar funcionan sin internet: se encolan y se envían al reconectar.
+// Si quedan en cola, la respuesta es { pendiente: true, data: null }.
 export const comandasApi = {
   listar: (params) => api.get('/comandas', { params }),
-  crear: (payload) => api.post('/comandas', payload),
-  cambiarEstado: (id, estado, metodoPago) => api.patch(`/comandas/${id}/estado`, { estado, metodoPago }),
+  crear: (payload, descripcion = 'Nueva comanda') =>
+    mutar({ metodo: 'post', url: '/comandas', data: { clienteId: nuevoId(), ...payload }, descripcion }),
+  cambiarEstado: (id, estado, descripcion = `Comanda → ${estado}`) =>
+    mutar({ metodo: 'patch', url: `/comandas/${id}/estado`, data: { estado }, descripcion }),
+  /** pagos: [{ metodo, monto, recibido? }]. Si no cubren el saldo queda como pago parcial. */
+  pagar: (id, pagos, descripcion = 'Cobro') =>
+    mutar({ metodo: 'post', url: `/comandas/${id}/pagos`, data: { clienteId: nuevoId(), pagos }, descripcion }),
 };
 
 export const reportesApi = {

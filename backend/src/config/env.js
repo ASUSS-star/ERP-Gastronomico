@@ -24,6 +24,12 @@ module.exports = {
     secret: process.env.JWT_SECRET,
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
   },
+  // Tiempo real (opcional): Supabase Realtime Broadcast. Sin estas variables la app funciona igual,
+  // y las pantallas se actualizan por consulta periódica.
+  realtime: {
+    url: process.env.SUPABASE_URL,
+    key: process.env.SUPABASE_SECRET_KEY,
+  },
   bcryptRounds: Number(process.env.BCRYPT_SALT_ROUNDS) || 10,
   corsOrigin: (process.env.CORS_ORIGIN || 'http://localhost:5173')
     .split(',')

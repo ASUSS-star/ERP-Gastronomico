@@ -287,6 +287,52 @@ describe('Inventario, menú y comandas', () => {
     expect(res.status).toBe(403);
   });
 
+  test('reintento con el mismo clienteId no duplica la comanda ni descuenta dos veces', async () => {
+    const cuerpo = { clienteId: `offline-${run}`, mesaId: ctx.mesaId, items: [{ platilloId: ctx.platilloId, cantidad: 1 }] };
+    const a = await api.post('/api/comandas').set(auth(ctx.mesero)).send(cuerpo);
+    const b = await api.post('/api/comandas').set(auth(ctx.mesero)).send(cuerpo);
+    expect(a.status).toBe(201);
+    expect(b.body.data.id).toBe(a.body.data.id);
+    const insumo = await api.get(`/api/insumos/${ctx.insumoId}`).set(auth(ctx.admin));
+    expect(Number(insumo.body.data.stockActual)).toBe(4);
+    ctx.comanda2Id = a.body.data.id;
+  });
+
+  test('flujo con aviso: EN_PREPARACION → LISTO → ENTREGADO (repetir el cambio no es error)', async () => {
+    const url = `/api/comandas/${ctx.comanda2Id}/estado`;
+    expect((await api.patch(url).set(auth(ctx.cocinero)).send({ estado: 'EN_PREPARACION' })).status).toBe(200);
+    expect((await api.patch(url).set(auth(ctx.mesero)).send({ estado: 'LISTO' })).status).toBe(403);
+    expect((await api.patch(url).set(auth(ctx.cocinero)).send({ estado: 'LISTO' })).status).toBe(200);
+    expect((await api.patch(url).set(auth(ctx.mesero)).send({ estado: 'ENTREGADO' })).status).toBe(200);
+    expect((await api.patch(url).set(auth(ctx.mesero)).send({ estado: 'ENTREGADO' })).status).toBe(200);
+  });
+
+  test('cuenta dividida: pago parcial en efectivo con cambio y resto con tarjeta', async () => {
+    const url = `/api/comandas/${ctx.comanda2Id}/pagos`;
+    expect((await api.post(url).set(auth(ctx.mesero)).send({ pagos: [{ metodo: 'TARJETA', monto: 1 }] })).status).toBe(403);
+
+    const parcial = await api.post(url).set(auth(ctx.cajero))
+      .send({ clienteId: `pago-${run}`, pagos: [{ metodo: 'EFECTIVO', monto: 10.5, recibido: 20 }] });
+    expect(parcial.status).toBe(200);
+    expect(parcial.body.data.estado).toBe('ENTREGADO');
+    expect(Number(parcial.body.data.pagos[0].cambio)).toBe(9.5);
+
+    // El mismo cobro reenviado no se registra dos veces
+    const repetido = await api.post(url).set(auth(ctx.cajero))
+      .send({ clienteId: `pago-${run}`, pagos: [{ metodo: 'EFECTIVO', monto: 10.5, recibido: 20 }] });
+    expect(repetido.body.data.pagos).toHaveLength(1);
+
+    expect((await api.post(url).set(auth(ctx.cajero)).send({ pagos: [{ metodo: 'TARJETA', monto: 11 }] })).status).toBe(400);
+    expect((await api.post(url).set(auth(ctx.cajero))
+      .send({ pagos: [{ metodo: 'EFECTIVO', monto: 10, recibido: 5 }] })).status).toBe(400);
+
+    const final = await api.post(url).set(auth(ctx.cajero)).send({ pagos: [{ metodo: 'TARJETA', monto: 10 }] });
+    expect(final.status).toBe(200);
+    expect(final.body.data.estado).toBe('PAGADO');
+    expect(final.body.data.metodoPago).toBe('EFECTIVO');
+    expect(final.body.data.pagos).toHaveLength(2);
+  });
+
   test('SALIDA de inventario mayor al stock → 409 (nunca negativo)', async () => {
     const res = await api.post(`/api/insumos/${ctx.insumoId}/movimientos`).set(auth(ctx.cocinero))
       .send({ tipo: 'SALIDA', cantidad: 1000, motivo: 'merma' });
@@ -314,7 +360,9 @@ describe('Inventario, menú y comandas', () => {
   test('reporte resumen accesible para CAJERO, no para MESERO', async () => {
     const ok = await api.get('/api/reportes/resumen').set(auth(ctx.cajero));
     expect(ok.status).toBe(200);
-    expect(Number(ok.body.data.ventas.total)).toBe(41);
+    expect(Number(ok.body.data.ventas.total)).toBe(61.5);
+    const porMetodo = Object.fromEntries(ok.body.data.ventasPorMetodo.map((m) => [m.metodo, Number(m.total)]));
+    expect(porMetodo).toEqual({ TARJETA: 51, EFECTIVO: 10.5 });
     expect((await api.get('/api/reportes/resumen').set(auth(ctx.mesero))).status).toBe(403);
   });
 });

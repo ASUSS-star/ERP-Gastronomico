@@ -15,6 +15,10 @@ module.exports = {
   actualizar: async (req, res) => ok(res, await service.actualizar(req.user, req.params.id, req.body), 'Comanda actualizada'),
   cambiarEstado: async (req, res) =>
     ok(res, await service.cambiarEstado(req.user, req.params.id, req.body), `Comanda cambiada a ${req.body.estado}`),
+  pagar: async (req, res) => {
+    const comanda = await service.registrarPagos(req.user, req.params.id, req.body);
+    ok(res, comanda, comanda.estado === 'PAGADO' ? 'Cuenta pagada' : 'Pago parcial registrado');
+  },
   eliminar: async (req, res) => {
     await service.eliminar(req.user, req.params.id);
     ok(res, null, 'Comanda eliminada');

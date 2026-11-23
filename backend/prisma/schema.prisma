@@ -31,6 +31,7 @@ enum Rol {
 enum EstadoComanda {
   PENDIENTE
   EN_PREPARACION
+  LISTO // la cocina terminó; el mesero recibe el aviso para llevarla a la mesa
   ENTREGADO
   PAGADO
   CANCELADO
@@ -75,6 +76,7 @@ model Restaurante {
   insumos     Insumo[]
   proveedores Proveedor[]
   comandas    Comanda[]
+  pagos       Pago[]
 
   @@map("restaurantes")
 }
@@ -95,6 +97,7 @@ model Usuario {
   restaurante   Restaurante           @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
   comandas      Comanda[]
   movimientos   MovimientoInventario[]
+  pagos         Pago[]
 
   @@index([restauranteId, rol])
   @@map("usuarios")
@@ -238,8 +241,10 @@ model Comanda {
   estado        EstadoComanda @default(PENDIENTE)
   notas         String?       @db.VarChar(500)
   total         Decimal       @default(0) @db.Decimal(10, 2)
-  metodoPago    MetodoPago?
+  metodoPago    MetodoPago? // método principal (el de mayor monto); el detalle está en `pagos`
   pagadoAt      DateTime?
+  // Id generado en el dispositivo: si la petición se reintenta (modo sin internet) no se duplica
+  clienteId     String?       @unique @db.VarChar(64)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -248,6 +253,7 @@ model Comanda {
   mesero        Usuario     @relation(fields: [meseroId], references: [id], onDelete: NoAction)
   detalles      DetalleComanda[]
   movimientos   MovimientoInventario[]
+  pagos         Pago[]
 
   @@unique([restauranteId, folio])
   @@index([restauranteId, estado])
@@ -269,4 +275,26 @@ model DetalleComanda {
   platillo       Platillo @relation(fields: [platilloId], references: [id], onDelete: NoAction)
 
   @@map("detalles_comanda")
+}
+
+// Cada cobro de una comanda. Una cuenta dividida o pagada con varios métodos tiene varios pagos.
+model Pago {
+  id            Int        @id @default(autoincrement())
+  restauranteId Int
+  comandaId     Int
+  usuarioId     Int?
+  metodo        MetodoPago
+  monto         Decimal    @db.Decimal(10, 2)
+  recibido      Decimal?   @db.Decimal(10, 2) // efectivo entregado por el cliente
+  cambio        Decimal?   @db.Decimal(10, 2)
+  clienteId     String?    @unique @db.VarChar(80)
+  createdAt     DateTime   @default(now())
+
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  comanda       Comanda     @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+  usuario       Usuario?    @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([restauranteId, createdAt])
+  @@index([comandaId])
+  @@map("pagos")
 }

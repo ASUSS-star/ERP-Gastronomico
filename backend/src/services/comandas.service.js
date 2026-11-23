@@ -9,6 +9,9 @@
  *  - Al CANCELAR (o editar items) se devuelve al inventario exactamente lo que se descontó.
  *  - Los cambios de estado siguen la máquina de estados de constants/index.js.
  *  - Un MESERO sólo ve y modifica sus propias comandas.
+ *  - El cobro admite varios pagos (cuenta dividida / varios métodos); la comanda pasa a
+ *    PAGADO cuando la suma de pagos cubre el total.
+ *  - `clienteId` (generado en el dispositivo) hace seguros los reintentos del modo sin internet.
  */
 const { Prisma } = require('@prisma/client');
 const prisma = require('../config/prisma');
@@ -24,6 +27,10 @@ const INCLUDE_COMANDA = {
   mesero: { select: { id: true, nombre: true } },
   detalles: {
     include: { platillo: { select: { id: true, nombre: true } } },
+    orderBy: { id: 'asc' },
+  },
+  pagos: {
+    select: { id: true, metodo: true, monto: true, recibido: true, cambio: true, createdAt: true },
     orderBy: { id: 'asc' },
   },
 };
@@ -162,7 +169,31 @@ const buscarComanda = async (db, restauranteId, id) => {
 // Casos de uso
 // ---------------------------------------------------------------------------
 
-const crear = async (user, { mesaId, notas, items }) =>
+/** Si el dispositivo ya envió esta comanda (reintento), devuelve la existente en lugar de duplicarla. */
+const buscarPorClienteId = async (user, clienteId) => {
+  const previa = await prisma.comanda.findUnique({ where: { clienteId }, include: INCLUDE_COMANDA });
+  if (previa && previa.restauranteId !== user.restauranteId) throw AppError.conflict('Identificador de comanda inválido');
+  return previa;
+};
+
+const crear = async (user, datos) => {
+  if (datos.clienteId) {
+    const previa = await buscarPorClienteId(user, datos.clienteId);
+    if (previa) return previa;
+  }
+  try {
+    return await crearNueva(user, datos);
+  } catch (e) {
+    // Dos reintentos simultáneos: el segundo choca con el índice único → devolvemos la primera
+    if (datos.clienteId && e.code === 'P2002') {
+      const previa = await buscarPorClienteId(user, datos.clienteId);
+      if (previa) return previa;
+    }
+    throw e;
+  }
+};
+
+const crearNueva = async (user, { mesaId, notas, items, clienteId }) =>
   prisma.$transaction(async (tx) => {
     const { restauranteId } = user;
 
@@ -187,6 +218,7 @@ const crear = async (user, { mesaId, notas, items }) =>
         meseroId: user.id,
         notas: notas || null,
         total,
+        clienteId: clienteId || null,
         detalles: { create: detalles },
       },
     });
@@ -277,6 +309,12 @@ const cambiarEstado = async (user, id, { estado: nuevo, metodoPago }) =>
     const comanda = await buscarComanda(tx, user.restauranteId, id);
     const actual = comanda.estado;
 
+    // Idempotente: repetir el mismo cambio (reintento sin internet, doble clic) no es un error
+    if (actual === nuevo) {
+      verificarPropiedad(user, comanda);
+      return tx.comanda.findUnique({ where: { id }, include: INCLUDE_COMANDA });
+    }
+
     const permitidas = TRANSICIONES_COMANDA[actual] || {};
     if (!permitidas[nuevo]) {
       const opciones = Object.keys(permitidas);
@@ -289,18 +327,102 @@ const cambiarEstado = async (user, id, { estado: nuevo, metodoPago }) =>
     }
     if (nuevo === 'CANCELADO') verificarPropiedad(user, comanda);
 
-    const data = { estado: nuevo };
+    // Cobro del saldo completo con un solo método (compatibilidad con la API anterior)
     if (nuevo === 'PAGADO') {
-      data.metodoPago = metodoPago;
-      data.pagadoAt = new Date();
+      await bloquear(tx, id);
+      await aplicarPagos(tx, user, comanda, [{ metodo: metodoPago, monto: null }]);
+      return tx.comanda.findUnique({ where: { id }, include: INCLUDE_COMANDA });
     }
 
+    const data = { estado: nuevo };
     const { count } = await tx.comanda.updateMany({ where: { id, estado: actual }, data });
     if (count === 0) throw AppError.conflict('La comanda fue modificada por otro usuario. Recarga e intenta de nuevo');
 
     if (nuevo === 'CANCELADO') await devolverStock(tx, id, user.id, `Cancelación de comanda #${comanda.folio}`);
     if (nuevo === 'PAGADO' || nuevo === 'CANCELADO') await liberarMesaSiCorresponde(tx, comanda.mesaId);
 
+    return tx.comanda.findUnique({ where: { id }, include: INCLUDE_COMANDA });
+  }, TX_OPCIONES);
+
+// ---------------------------------------------------------------------------
+// Cobro
+// ---------------------------------------------------------------------------
+
+/** Bloquea la fila de la comanda hasta el fin de la transacción (dos cajas cobrando a la vez). */
+const bloquear = (tx, id) => tx.$queryRaw`SELECT id FROM comandas WHERE id = ${id} FOR UPDATE`;
+
+/**
+ * Registra pagos contra el saldo pendiente. `monto: null` significa "todo el saldo".
+ * Si con estos pagos se cubre el total, la comanda pasa a PAGADO y se libera la mesa.
+ */
+const aplicarPagos = async (tx, user, comanda, pagos, clienteId) => {
+  const previos = await tx.pago.aggregate({ where: { comandaId: comanda.id }, _sum: { monto: true } });
+  const saldo = comanda.total.sub(previos._sum.monto || 0);
+  if (saldo.lte(0)) throw AppError.conflict('La cuenta ya está saldada');
+
+  let restante = saldo;
+  const filas = pagos.map((p, i) => {
+    const monto = p.monto == null ? restante : new Prisma.Decimal(p.monto);
+    if (monto.lte(0)) throw AppError.badRequest('Cada pago debe ser mayor a 0');
+    if (monto.gt(restante)) {
+      throw AppError.badRequest(`Los pagos suman más que el saldo pendiente ($${saldo.toFixed(2)})`);
+    }
+    restante = restante.sub(monto);
+
+    let recibido = null;
+    let cambio = null;
+    if (p.metodo === 'EFECTIVO' && p.recibido != null) {
+      recibido = new Prisma.Decimal(p.recibido);
+      if (recibido.lt(monto)) {
+        throw AppError.badRequest(`El efectivo recibido ($${recibido.toFixed(2)}) es menor al monto ($${monto.toFixed(2)})`);
+      }
+      cambio = recibido.sub(monto);
+    }
+    return {
+      restauranteId: comanda.restauranteId,
+      comandaId: comanda.id,
+      usuarioId: user.id,
+      metodo: p.metodo,
+      monto,
+      recibido,
+      cambio,
+      clienteId: clienteId ? `${clienteId}:${i}` : null,
+    };
+  });
+  await tx.pago.createMany({ data: filas });
+
+  if (restante.gt(0)) return; // pago parcial: la comanda sigue ENTREGADA
+
+  // Método principal = el de mayor importe (para la columna metodoPago y reportes antiguos)
+  const porMetodo = await tx.pago.groupBy({ by: ['metodo'], where: { comandaId: comanda.id }, _sum: { monto: true } });
+  const principal = porMetodo.reduce((a, b) => (b._sum.monto.gt(a._sum.monto) ? b : a)).metodo;
+
+  const { count } = await tx.comanda.updateMany({
+    where: { id: comanda.id, estado: comanda.estado },
+    data: { estado: 'PAGADO', metodoPago: principal, pagadoAt: new Date() },
+  });
+  if (count === 0) throw AppError.conflict('La comanda fue modificada por otro usuario. Recarga e intenta de nuevo');
+  await liberarMesaSiCorresponde(tx, comanda.mesaId);
+};
+
+/** POST /comandas/:id/pagos — uno o varios pagos (cuenta dividida, varios métodos). */
+const registrarPagos = async (user, id, { pagos, clienteId }) =>
+  prisma.$transaction(async (tx) => {
+    await buscarComanda(tx, user.restauranteId, id);
+    await bloquear(tx, id);
+
+    // Reintento de un cobro que ya se guardó → devolvemos la comanda tal como quedó
+    if (clienteId && (await tx.pago.findUnique({ where: { clienteId: `${clienteId}:0` }, select: { id: true } }))) {
+      return tx.comanda.findUnique({ where: { id }, include: INCLUDE_COMANDA });
+    }
+
+    const comanda = await buscarComanda(tx, user.restauranteId, id); // releída ya bloqueada
+    if (comanda.estado === 'PAGADO') throw AppError.conflict('La comanda ya está pagada');
+    if (comanda.estado !== 'ENTREGADO') {
+      throw AppError.badRequest(`Sólo se cobran comandas ENTREGADAS (estado actual: ${comanda.estado})`);
+    }
+
+    await aplicarPagos(tx, user, comanda, pagos, clienteId);
     return tx.comanda.findUnique({ where: { id }, include: INCLUDE_COMANDA });
   }, TX_OPCIONES);
 
@@ -321,4 +443,6 @@ const eliminar = async (user, id) =>
     await liberarMesaSiCorresponde(tx, comanda.mesaId);
   }, TX_OPCIONES);
 
-module.exports = { crear, listar, listarPorMesa, listarPorMesero, obtener, actualizar, cambiarEstado, eliminar };
+module.exports = {
+  crear, listar, listarPorMesa, listarPorMesero, obtener, actualizar, cambiarEstado, registrarPagos, eliminar,
+};

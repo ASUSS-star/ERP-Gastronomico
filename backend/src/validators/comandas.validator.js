@@ -1,4 +1,4 @@
-const { Joi, id, texto, paginacion } = require('./comunes');
+const { Joi, id, texto, paginacion, dinero } = require('./comunes');
 const { ESTADOS_COMANDA, METODOS_PAGO } = require('../constants');
 
 const item = Joi.object({
@@ -7,7 +7,11 @@ const item = Joi.object({
   notas: texto(255).allow('', null),
 });
 
+// Id generado en el dispositivo para reintentos seguros (modo sin internet)
+const clienteId = Joi.string().trim().max(64).pattern(/^[A-Za-z0-9_-]+$/);
+
 const crear = Joi.object({
+  clienteId,
   mesaId: id.required(),
   notas: texto(500).allow('', null),
   items: Joi.array().items(item).min(1).max(50).required(),
@@ -26,6 +30,17 @@ const cambiarEstado = Joi.object({
     then: Joi.string().uppercase().valid(...METODOS_PAGO).required(),
     otherwise: Joi.forbidden(),
   }),
+});
+
+// Cobro: uno o varios pagos (cuenta dividida / varios métodos). Si no cubren el saldo, queda un pago parcial.
+const pago = Joi.object({
+  metodo: Joi.string().uppercase().valid(...METODOS_PAGO).required(),
+  monto: dinero.greater(0).required(),
+  recibido: dinero.allow(null), // sólo se usa con EFECTIVO para calcular el cambio
+});
+const pagar = Joi.object({
+  clienteId,
+  pagos: Joi.array().items(pago).min(1).max(20).required(),
 });
 
 const listar = Joi.object({
@@ -49,4 +64,4 @@ const listar = Joi.object({
 const mesaParam = Joi.object({ mesaId: id.required() });
 const meseroParam = Joi.object({ meseroId: id.required() });
 
-module.exports = { crear, actualizar, cambiarEstado, listar, mesaParam, meseroParam };
+module.exports = { crear, actualizar, cambiarEstado, pagar, listar, mesaParam, meseroParam };

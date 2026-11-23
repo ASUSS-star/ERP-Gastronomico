@@ -2,6 +2,8 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTema } from '../hooks/useTema';
 import Icono from './ui/Icono';
+import EstadoConexion from './EstadoConexion';
+import AvisosComandas from './AvisosComandas';
 
 const TITULOS = { '/cocina': 'Cocina', '/caja': 'Caja' };
 // Sólo estos roles tienen pantallas administrativas a las que volver
@@ -21,6 +23,8 @@ export default function LayoutOperacion() {
         {volver && <button className="btn" onClick={() => nav('/')}><Icono n="panel" /> Panel</button>}
         {usuario.rol === 'COCINERO' && <button className="btn" onClick={() => nav('/inventario')}><Icono n="inventario" /> Inventario</button>}
         <h1>{TITULOS[pathname] ?? 'Operación'} · {usuario.restaurante?.nombre}</h1>
+        <EstadoConexion />
+        {usuario.rol === 'ADMIN' && <AvisosComandas compacto />}
         <button className="btn" onClick={alternarTema} aria-label="Cambiar tema"><Icono n={tema === 'dark' ? 'sol' : 'luna'} /></button>
         <button className="btn" onClick={logout}><Icono n="salir" /> Salir</button>
       </header>

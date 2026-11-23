@@ -170,3 +170,31 @@
   .acceso-arte h1 { font-size: 1.6rem; max-width: none; }
   .acceso-puntos { display: none; }
 }
+
+/* ---------- Comida lista / conexión ---------- */
+.badge-listo { background: var(--ok); color: #fff; animation: latido 1.6s ease-in-out infinite; }
+@keyframes latido { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--ok) 25%, transparent); } }
+.comanda[data-listo] { border-left-color: var(--ok); box-shadow: 0 0 0 2px var(--ok), var(--shadow-sm); }
+@media (prefers-reduced-motion: reduce) { .badge-listo { animation: none; } }
+
+.conexion { display: inline-flex; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 999px; padding: 5px 12px;
+  font: 600 .82rem var(--font); cursor: pointer; background: var(--ok-bg); color: var(--ok); white-space: nowrap; }
+.conexion i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.conexion[data-tono='warn'] { background: var(--warn-bg); color: var(--warn); }
+.conexion[data-tono='err'] { background: var(--err-bg); color: var(--err); }
+.side .conexion { justify-self: start; }
+
+/* ---------- Cobro ---------- */
+.saldos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.saldos div { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; display: grid; gap: 2px; }
+.saldos small { color: var(--text-2); font-weight: 600; }
+.saldos b { font: 700 1.2rem var(--font-display); font-variant-numeric: tabular-nums; }
+.linea-pago { display: grid; grid-template-columns: minmax(0, 1fr) 120px 120px auto; gap: 8px; align-items: end;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; }
+.linea-pago .metodos { grid-column: 1 / -1; }
+.linea-pago .campo span { font-size: .8em; }
+@media (max-width: 560px) { .linea-pago { grid-template-columns: 1fr 1fr auto; } .linea-pago .cambio { grid-column: 1 / -1; } }
+.platillos-cuenta { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.platillos-cuenta label { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.platillos-cuenta label:hover { background: var(--surface-2); }
+.platillos-cuenta input { width: 18px; height: 18px; accent-color: var(--accent); }

@@ -53,8 +53,10 @@ function TomarPedido({ mesa, onCerrar, onCreada }) {
         mesaId: mesa.id,
         notas,
         items: lineas.map((l) => ({ platilloId: l.platillo.id, cantidad: l.cantidad, notas: l.notas })),
-      });
-      avisar.ok(`Comanda #${res.data.folio} enviada a cocina`);
+      }, `Comanda mesa ${mesa.numero} · ${lineas.length} platillo(s) · ${dinero(total)}`);
+      avisar.ok(res.pendiente
+        ? 'Sin internet: la comanda se guardó y se enviará a cocina al volver la conexión'
+        : `Comanda #${res.data.folio} enviada a cocina`);
       onCreada();
     } catch (err) {
       avisar.error(err); // p. ej. "Stock insuficiente de …"
@@ -152,10 +154,10 @@ export default function Salon() {
   const { usuario } = useAuth();
   const avisar = useAvisos();
   const esAdmin = usuario.rol === 'ADMIN';
-  const mesas = useFetch(() => mesasApi.listar().then((r) => r.data), { intervalo: 15000 });
+  const mesas = useFetch(() => mesasApi.listar().then((r) => r.data), { intervalo: 15000, escuchar: ['mesas'] });
   const comandas = useFetch(
-    () => comandasApi.listar({ estado: 'PENDIENTE,EN_PREPARACION,ENTREGADO', limit: 50 }).then((r) => r.data),
-    { intervalo: 10000 },
+    () => comandasApi.listar({ estado: 'PENDIENTE,EN_PREPARACION,LISTO,ENTREGADO', limit: 50 }).then((r) => r.data),
+    { intervalo: 10000, escuchar: ['comandas'] },
   );
   const [mesaPedido, setMesaPedido] = useState(null);
   const [nuevaMesa, setNuevaMesa] = useState(false);
@@ -167,15 +169,19 @@ export default function Salon() {
     if (estado === 'CANCELADO' && !window.confirm(`¿Cancelar la comanda #${c.folio}? Los insumos regresan al inventario.`)) return;
     setEnCurso(c.id);
     try {
-      await comandasApi.cambiarEstado(c.id, estado);
-      avisar.ok(estado === 'CANCELADO' ? `Comanda #${c.folio} cancelada` : `Comanda #${c.folio} entregada`);
+      const res = await comandasApi.cambiarEstado(c.id, estado, `Salón: comanda #${c.folio} (mesa ${c.mesa?.numero}) → ${estado}`);
+      if (res.pendiente) avisar.ok('Sin internet: el cambio se enviará al reconectar');
+      else avisar.ok(estado === 'CANCELADO' ? `Comanda #${c.folio} cancelada` : `Comanda #${c.folio} entregada`);
       refrescar();
     } catch (err) { avisar.error(err); } finally { setEnCurso(null); }
   };
 
   const lista = mesas.data ?? [];
   const libres = lista.filter((m) => m.estado === 'LIBRE').length;
-  const abiertas = comandas.data ?? [];
+  // Las que ya salieron de cocina van primero
+  const PRIORIDAD = { LISTO: 0, EN_PREPARACION: 1, PENDIENTE: 2, ENTREGADO: 3 };
+  const abiertas = [...(comandas.data ?? [])].sort((a, b) => PRIORIDAD[a.estado] - PRIORIDAD[b.estado]);
+  const listas = abiertas.filter((c) => c.estado === 'LISTO').length;
 
   return (
     <div className="pagina">
@@ -209,13 +215,16 @@ export default function Salon() {
       </EstadoVista>
 
       <section>
-        <div className="seccion-cab"><h2>Comandas abiertas {abiertas.length ? `(${abiertas.length})` : ''}</h2></div>
+        <div className="seccion-cab">
+          <h2>Comandas abiertas {abiertas.length ? `(${abiertas.length})` : ''}</h2>
+          {listas > 0 && <span className="badge badge-listo">{listas} {listas === 1 ? 'lista' : 'listas'} para servir</span>}
+        </div>
         <EstadoVista loading={comandas.loading} error={comandas.error} vacio={!abiertas.length} onReintentar={comandas.recargar}
           skeleton={<SkeletonComandas n={3} />} tituloVacio="Sin comandas abiertas" textoVacio="Los pedidos que envíes a cocina aparecerán aquí.">
           <div className="tablero">
             {abiertas.map((c) => (
               <ComandaCard key={c.id} comanda={c} mostrarTotal cargando={enCurso === c.id}
-                accion={c.estado === 'EN_PREPARACION' ? 'Marcar entregada' : undefined}
+                accion={['EN_PREPARACION', 'LISTO'].includes(c.estado) ? 'Marcar entregada' : undefined}
                 onAccion={(x) => cambiar(x, 'ENTREGADO')}
                 secundaria={c.estado === 'PENDIENTE' ? 'Cancelar' : undefined}
                 onSecundaria={(x) => cambiar(x, 'CANCELADO')} />

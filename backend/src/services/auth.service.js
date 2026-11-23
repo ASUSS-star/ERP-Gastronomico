@@ -5,6 +5,7 @@ const env = require('../config/env');
 const AppError = require('../utils/AppError');
 const { firmarToken } = require('../utils/jwt');
 const { slugify } = require('../utils/slug');
+const { canalDe } = require('../utils/tiempoReal');
 const { ROLES } = require('../constants');
 
 // Campos públicos del usuario (NUNCA devolver el hash del password)
@@ -59,13 +60,15 @@ const registrarRestaurante = async ({ restaurante, admin }) => {
 
   const usuario = nuevo.usuarios[0];
   const { usuarios, ...datosRestaurante } = nuevo;
-  return { token: firmarToken(usuario), usuario, restaurante: datosRestaurante };
+  return { token: firmarToken(usuario), usuario, restaurante: { ...datosRestaurante, canal: canalDe(nuevo.id) } };
 };
 
 const login = async ({ email, password }) => {
   const usuario = await prisma.usuario.findUnique({
     where: { email },
-    include: { restaurante: { select: { id: true, nombre: true, slug: true, activo: true } } },
+    include: {
+      restaurante: { select: { id: true, nombre: true, slug: true, telefono: true, direccion: true, activo: true } },
+    },
   });
 
   const passwordOk = await bcrypt.compare(password, usuario ? usuario.password : HASH_DUMMY);
@@ -75,14 +78,17 @@ const login = async ({ email, password }) => {
   if (!usuario.restaurante.activo) throw AppError.forbidden('El restaurante está suspendido');
 
   const { password: _omit, restaurante, ...datos } = usuario;
-  return { token: firmarToken(usuario), usuario: datos, restaurante };
+  return { token: firmarToken(usuario), usuario: datos, restaurante: { ...restaurante, canal: canalDe(restaurante.id) } };
 };
 
-const perfil = async (userId) =>
-  prisma.usuario.findUnique({
+const perfil = async (userId) => {
+  const usuario = await prisma.usuario.findUnique({
     where: { id: userId },
     select: { ...SELECT_USUARIO, restaurante: { select: { id: true, nombre: true, slug: true, telefono: true, direccion: true } } },
   });
+  // `canal`: nombre del canal de tiempo real del restaurante (no adivinable sin JWT_SECRET)
+  return usuario && { ...usuario, restaurante: { ...usuario.restaurante, canal: canalDe(usuario.restauranteId) } };
+};
 
 const cambiarPassword = async (userId, { passwordActual, passwordNueva }) => {
   const usuario = await prisma.usuario.findUnique({ where: { id: userId } });

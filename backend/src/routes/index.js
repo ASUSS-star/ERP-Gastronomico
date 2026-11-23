@@ -1,9 +1,14 @@
 /** Enrutador principal: monta cada módulo bajo /api/<recurso> */
 const { Router } = require('express');
 
+const { notificarCambios } = require('../middlewares/tiempoReal.middleware');
+
 const router = Router();
 
 router.get('/health', (_req, res) => res.json({ ok: true, servicio: 'ERP Gastronómico API', fecha: new Date() }));
+
+// Tras cada cambio exitoso avisa en tiempo real a las pantallas del restaurante
+router.use(notificarCambios);
 
 // Descomenta cada línea cuando agregues su módulo:
 // --- Módulo de Usuarios y Autenticación ---

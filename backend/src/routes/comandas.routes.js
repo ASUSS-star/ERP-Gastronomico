@@ -7,7 +7,7 @@ const { autenticar } = require('../middlewares/auth.middleware');
 const { permitirRoles } = require('../middlewares/roles.middleware');
 const { ROLES } = require('../constants');
 
-const { ADMIN, MESERO } = ROLES;
+const { ADMIN, MESERO, CAJERO } = ROLES;
 const router = Router();
 router.use(autenticar);
 
@@ -23,6 +23,9 @@ router.put('/:id', permitirRoles(MESERO, ADMIN), validar({ params: idParam, body
 
 // Flujo de estados (qué rol puede qué transición lo decide la máquina de estados)
 router.patch('/:id/estado', validar({ params: idParam, body: v.cambiarEstado }), ctrl.cambiarEstado);
+
+// Cobro con uno o varios pagos (cuenta dividida, varios métodos)
+router.post('/:id/pagos', permitirRoles(CAJERO, ADMIN), validar({ params: idParam, body: v.pagar }), ctrl.pagar);
 
 router.delete('/:id', permitirRoles(ADMIN), validar({ params: idParam }), ctrl.eliminar);
 

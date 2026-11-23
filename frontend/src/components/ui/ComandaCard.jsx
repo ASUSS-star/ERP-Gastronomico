@@ -17,7 +17,7 @@ export default function ComandaCard({ comanda: c, accion, onAccion, secundaria, 
   const min = Math.max(0, Math.floor((Date.now() - new Date(fecha).getTime()) / 60000));
 
   return (
-    <article className="card comanda" data-urgencia={urgencia(fecha)}>
+    <article className="card comanda" data-urgencia={urgencia(fecha)} data-listo={c.estado === 'LISTO' || undefined}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <strong style={{ fontSize: '1.2em' }}>#{c.folio} · Mesa {c.mesa?.numero}</strong>
         <EstadoBadge estado={c.estado} />
@@ -34,6 +34,7 @@ export default function ComandaCard({ comanda: c, accion, onAccion, secundaria, 
       </ul>
       {c.notas && <p className="alerta badge-warn" style={{ marginTop: 10 }}>Nota: {c.notas}</p>}
       {mostrarTotal && <p style={{ marginTop: 10, fontWeight: 700 }} className="num">Total {dinero(c.total)}</p>}
+      {c.pendiente && <p className="badge badge-warn" style={{ marginTop: 8 }}>Sin enviar: se sincroniza al volver internet</p>}
       {(accion || secundaria) && (
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           {secundaria && (

@@ -1,7 +1,8 @@
 const MAPA = {
   PENDIENTE: ['badge-warn', 'Pendiente'],
   EN_PREPARACION: ['badge-info', 'En preparación'],
-  ENTREGADO: ['badge-ok', 'Entregado'],
+  LISTO: ['badge-listo', '¡Lista para servir!'],
+  ENTREGADO: ['badge-neutral', 'Entregado'],
   PAGADO: ['badge-ok', 'Pagado'],
   CANCELADO: ['badge-err', 'Cancelado'],
 };

@@ -17,7 +17,8 @@ const resumen = async (restauranteId, { desde, hasta } = {}) => {
   const [ventas, porEstado, porMetodo, topAgrupado, stockBajo, mesasOcupadas] = await Promise.all([
     prisma.comanda.aggregate({ where: wherePagadas, _sum: { total: true }, _count: true, _avg: { total: true } }),
     prisma.comanda.groupBy({ by: ['estado'], where: { restauranteId, createdAt: rango }, _count: true }),
-    prisma.comanda.groupBy({ by: ['metodoPago'], where: wherePagadas, _sum: { total: true }, _count: true }),
+    // Por método se suman los PAGOS: una cuenta dividida aporta a varios métodos
+    prisma.pago.groupBy({ by: ['metodo'], where: { restauranteId, comanda: wherePagadas }, _sum: { monto: true }, _count: true }),
     prisma.detalleComanda.groupBy({
       by: ['platilloId'],
       where: { comanda: wherePagadas },
@@ -42,7 +43,7 @@ const resumen = async (restauranteId, { desde, hasta } = {}) => {
       ticketPromedio: ventas._avg.total || 0,
     },
     comandasPorEstado: Object.fromEntries(porEstado.map((e) => [e.estado, e._count])),
-    ventasPorMetodo: porMetodo.map((m) => ({ metodo: m.metodoPago, total: m._sum.total, comandas: m._count })),
+    ventasPorMetodo: porMetodo.map((m) => ({ metodo: m.metodo, total: m._sum.monto, pagos: m._count })),
     topPlatillos: topAgrupado.map((t) => ({
       platilloId: t.platilloId,
       nombre: nombres.find((n) => n.id === t.platilloId)?.nombre,

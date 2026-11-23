@@ -55,7 +55,7 @@ export default function Personal() {
   const { usuario: yo } = useAuth();
   const avisar = useAvisos();
   const [q, setQ] = useState('');
-  const { data, loading, error, recargar } = useFetch(() => usuariosApi.listar({ limit: 100 }).then((r) => r.data));
+  const { data, loading, error, recargar } = useFetch(() => usuariosApi.listar({ limit: 100 }).then((r) => r.data), { escuchar: ['usuarios'] });
   const [form, setForm] = useState(null); // null | {} (nuevo) | usuario (editar)
 
   const alternar = async (u) => {

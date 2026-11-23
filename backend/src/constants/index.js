@@ -10,6 +10,7 @@ const ROLES = Object.freeze({
 const ESTADOS_COMANDA = Object.freeze({
   PENDIENTE: 'PENDIENTE',
   EN_PREPARACION: 'EN_PREPARACION',
+  LISTO: 'LISTO',
   ENTREGADO: 'ENTREGADO',
   PAGADO: 'PAGADO',
   CANCELADO: 'CANCELADO',
@@ -26,9 +27,17 @@ const TRANSICIONES_COMANDA = Object.freeze({
     CANCELADO: [ROLES.MESERO, ROLES.ADMIN],
   },
   EN_PREPARACION: {
+    // LISTO avisa al mesero; ENTREGADO directo se conserva para cocinas sin mesero
+    LISTO: [ROLES.COCINERO, ROLES.ADMIN],
     ENTREGADO: [ROLES.COCINERO, ROLES.MESERO, ROLES.ADMIN],
     CANCELADO: [ROLES.ADMIN],
   },
+  LISTO: {
+    ENTREGADO: [ROLES.MESERO, ROLES.COCINERO, ROLES.ADMIN],
+    CANCELADO: [ROLES.ADMIN],
+  },
+  // El cobro se hace con POST /comandas/:id/pagos (admite cuentas divididas);
+  // PATCH estado=PAGADO sigue funcionando y cobra el saldo completo con un solo método.
   ENTREGADO: {
     PAGADO: [ROLES.CAJERO, ROLES.ADMIN],
   },

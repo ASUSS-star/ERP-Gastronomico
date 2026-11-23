@@ -13,3 +13,9 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# El service worker debe revisarse en cada visita para que las actualizaciones lleguen
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

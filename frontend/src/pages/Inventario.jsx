@@ -174,9 +174,9 @@ export default function Inventario() {
   const [soloBajo, setSoloBajo] = useState(false);
   const insumos = useFetch(
     () => insumosApi.listar({ limit: 100, ...(soloBajo && { stockBajo: true }) }).then((r) => r.data),
-    { deps: [soloBajo] },
+    { deps: [soloBajo], escuchar: ['inventario'] },
   );
-  const proveedores = useFetch(() => proveedoresApi.listar().then((r) => r.data));
+  const proveedores = useFetch(() => proveedoresApi.listar().then((r) => r.data), { escuchar: ['inventario'] });
   const [modal, setModal] = useState(null); // { tipo, dato }
   const cerrar = () => setModal(null);
   const refrescar = () => { cerrar(); insumos.recargar(true); proveedores.recargar(true); };

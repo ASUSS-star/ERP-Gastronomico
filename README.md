@@ -410,8 +410,8 @@ npm run dev              # http://localhost:5173
 | Iniciar sesión / Registro | `/login`, `/registro` | Público | Acceso y alta de un restaurante nuevo con su ADMIN |
 | Panel | `/` | ADMIN, CAJERO | Ventas, ticket promedio, top platillos, métodos de pago, stock bajo (hoy / 7 / 30 días) |
 | Salón y pedidos | `/salon` | ADMIN, MESERO | Mesas, toma de pedido, comandas abiertas (entregar / cancelar) |
-| Cocina | `/cocina` | ADMIN, COCINERO | Tablero de comandas pendientes y en preparación |
-| Caja | `/caja` | ADMIN, CAJERO | Cobro de comandas entregadas |
+| Cocina | `/cocina` | ADMIN, COCINERO | Pendientes, en preparación y listas; suena al llegar una comanda |
+| Caja | `/caja` | ADMIN, CAJERO | Cobro completo, dividido o con varios métodos; impresión de ticket |
 | Menú y recetas | `/menu` | ADMIN | Categorías, platillos, disponibilidad y receta (costo por porción) |
 | Inventario | `/inventario` | ADMIN, COCINERO | Insumos, movimientos, kardex y proveedores |
 | Personal | `/personal` | ADMIN | Alta, edición y baja de empleados |
@@ -427,6 +427,27 @@ Al entrar, cada rol aterriza en su pantalla: MESERO → Salón, COCINERO → Coc
 5. `src/styles/tokens.css` (variables, botones, formularios) y `src/styles/app.css` (layout y pantallas). Tema claro/oscuro con `useTema()`.
 
 Para agregar una pantalla: crea el archivo en `src/pages/`, agrega la función en `services.js`, registra la ruta en `App.jsx` y el enlace en `Layout.jsx`.
+
+## 🆕 Operación en vivo, cuentas divididas, sin internet e impresora
+
+| Función | Cómo funciona |
+|---|---|
+| **Comida lista** | Cocina marca *¡Lista para servir!* (estado `LISTO`) → el mesero recibe aviso con sonido, mensaje y notificación del navegador → marca *Entregada* |
+| **Tiempo real** | Tras cada cambio el backend publica un aviso en Supabase Realtime (Broadcast) y las pantallas recargan al instante. Sin las variables de Supabase, se actualizan cada 10–15 s |
+| **Cuenta dividida** | `POST /api/comandas/:id/pagos` con uno o varios pagos (`EFECTIVO`, `TARJETA`, `TRANSFERENCIA`). Partes iguales, por platillos o montos libres; admite pagos parciales y calcula el cambio |
+| **Sin internet** | La app abre sin red (service worker), muestra la última información guardada y encola comandas, cambios de estado y cobros; se envían solos al reconectar. `clienteId` evita duplicados |
+| **Ticket** | Impresión con el navegador en la impresora térmica de la caja (58 u 80 mm), automática al cobrar, pre-cuenta y reimpresión |
+
+Variables nuevas (opcionales, para tiempo real):
+
+| Dónde | Variable | Valor |
+|---|---|---|
+| Vercel (backend) | `SUPABASE_URL` | `https://<proyecto>.supabase.co` |
+| Vercel (backend) | `SUPABASE_SECRET_KEY` | Llave secreta `sb_secret_…` (nunca en el frontend) |
+| Netlify (frontend) | `VITE_SUPABASE_URL` | La misma URL |
+| Netlify (frontend) | `VITE_SUPABASE_PUBLISHABLE_KEY` | Llave publicable `sb_publishable_…` |
+
+Migración de base de datos: `cd backend && npm run db:deploy` (agrega el estado `LISTO`, la tabla `pagos` y `clienteId`; los cobros anteriores se copian a `pagos`).
 
 ## ☁️ Despliegue
 

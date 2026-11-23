@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTema } from '../hooks/useTema';
 import { ROLES } from '../utils/formato';
 import Icono from './ui/Icono';
+import EstadoConexion from './EstadoConexion';
+import AvisosComandas from './AvisosComandas';
 
 // Menú lateral según el rol
 const MENU = [
@@ -61,6 +63,8 @@ export default function Layout() {
         ))}
 
         <div className="side-pie">
+          <EstadoConexion />
+          {['MESERO', 'ADMIN'].includes(usuario.rol) && <AvisosComandas />}
           <div className="side-usuario">
             <span className="avatar">{usuario.nombre?.[0]?.toUpperCase()}</span>
             <div>

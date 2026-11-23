@@ -130,12 +130,12 @@ function FormReceta({ platillo, onCerrar }) {
 /** Menú: categorías, platillos, disponibilidad y recetas. */
 export default function Menu() {
   const avisar = useAvisos();
-  const cats = useFetch(() => categoriasApi.listar().then((r) => r.data));
+  const cats = useFetch(() => categoriasApi.listar().then((r) => r.data), { escuchar: ['menu'] });
   const [catId, setCatId] = useState(null);
   const [q, setQ] = useState('');
   const platillos = useFetch(
     () => platillosApi.listar({ limit: 100, ...(catId && { categoriaId: catId }) }).then((r) => r.data),
-    { deps: [catId] },
+    { deps: [catId], escuchar: ['menu'] },
   );
   const [form, setForm] = useState(null);
   const [receta, setReceta] = useState(null);
