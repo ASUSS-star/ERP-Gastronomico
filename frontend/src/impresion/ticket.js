@@ -139,7 +139,8 @@ export async function imprimirTicket(datos, ajustes = leerAjustes()) {
 export function imprimirHtml(html) {
   const iframe = document.createElement('iframe');
   iframe.setAttribute('aria-hidden', 'true');
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  // Fuera de pantalla pero con tamaño real: un iframe oculto (0×0 o visibility:hidden) puede imprimirse en blanco
+  iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:80mm;height:200mm;border:0;opacity:0;pointer-events:none';
   document.body.appendChild(iframe);
   const doc = iframe.contentWindow.document;
   doc.open();
