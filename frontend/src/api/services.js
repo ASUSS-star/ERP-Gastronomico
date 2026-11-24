@@ -50,4 +50,5 @@ export const comandasApi = {
 
 export const reportesApi = {
   resumen: (params) => api.get('/reportes/resumen', { params }),
+  corte: (params) => api.get('/reportes/corte', { params }),
 };

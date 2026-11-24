@@ -4,8 +4,10 @@ import { useFetch } from '../hooks/useFetch';
 import { useAuth } from '../context/AuthContext';
 import { useAvisos } from '../context/AvisosContext';
 import { dinero } from '../utils/formato';
-import { imprimirTicket, leerAjustes, guardarAjustes, ultimoTicket, ticketPrueba } from '../impresion/ticket';
+import { imprimirTicket, leerAjustes, guardarAjustes, ultimoTicket, ticketPrueba, abrirCajon } from '../impresion/ticket';
+import { soportaUsb, conectarImpresora, nombreImpresora, olvidarImpresora } from '../impresion/usb';
 import EstadoVista from '../components/ui/EstadoVista';
+import CorteCaja from '../components/CorteCaja';
 import Modal from '../components/ui/Modal';
 import Icono from '../components/ui/Icono';
 import { SkeletonComandas } from '../components/skeletons/Skeleton';
@@ -190,21 +192,65 @@ function Cobro({ comanda, onCerrar, onCobrado }) {
 function Impresora({ restaurante, onCerrar }) {
   const avisar = useAvisos();
   const [a, setA] = useState(leerAjustes);
+  const [usb, setUsb] = useState(null); // nombre de la impresora USB autorizada
   const cambiar = (e) => setA({ ...a, [e.target.name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
+  const ajustes = { ...a, papel: Number(a.papel), copias: Number(a.copias) };
+
+  useEffect(() => { nombreImpresora().then(setUsb).catch(() => {}); }, []);
+
+  const conectar = async () => {
+    try {
+      setUsb(await conectarImpresora());
+      setA((x) => ({ ...x, modo: 'usb' }));
+      avisar.ok('Impresora USB conectada');
+    } catch (e) {
+      if (e.name !== 'NotFoundError') avisar.error(e.message); // NotFoundError = cerraron el selector
+    }
+  };
+  const probar = () => imprimirTicket(ticketPrueba(restaurante), ajustes).catch((e) => avisar.error(e.message));
+  const cajon = () => abrirCajon(ajustes).catch((e) => avisar.error(e.message));
   const guardar = () => {
-    guardarAjustes({ ...a, papel: Number(a.papel), copias: Number(a.copias) });
+    guardarAjustes(ajustes);
     avisar.ok('Ajustes de impresión guardados en este equipo');
     onCerrar();
   };
+
   return (
     <Modal titulo="Impresora de tickets" onCerrar={onCerrar} onSubmit={guardar}
       pie={<>
-        <button type="button" className="btn" onClick={() => imprimirTicket(ticketPrueba(restaurante), { ...a, papel: Number(a.papel) })}>
-          <Icono n="ticket" size={16} /> Imprimir prueba
-        </button>
+        {a.modo === 'usb' && a.cajon && <button type="button" className="btn" onClick={cajon}>Abrir cajón</button>}
+        <button type="button" className="btn" onClick={probar}><Icono n="ticket" size={16} /> Imprimir prueba</button>
         <button className="btn btn-primary">Guardar</button>
       </>}>
-      <p className="muted">Usa la impresora predeterminada de este equipo. Estos ajustes se guardan sólo en esta computadora.</p>
+      <p className="muted">Estos ajustes se guardan sólo en esta computadora.</p>
+
+      <div className="segmentado" role="group" aria-label="Forma de imprimir">
+        <button type="button" aria-pressed={a.modo === 'usb'} onClick={() => setA({ ...a, modo: 'usb' })}>USB directo (recomendado)</button>
+        <button type="button" aria-pressed={a.modo !== 'usb'} onClick={() => setA({ ...a, modo: 'navegador' })}>Impresora de Windows</button>
+      </div>
+
+      {a.modo === 'usb' ? (
+        <section className="card" style={{ display: 'grid', gap: 10, padding: 14 }}>
+          {!soportaUsb() ? (
+            <p className="alerta alerta-err">Este navegador no permite USB directo. Abre el sistema en Chrome o Edge en computadora.</p>
+          ) : (
+            <>
+              <p>{usb ? <>Conectada: <b>{usb}</b></> : 'Ninguna impresora USB conectada todavía.'}</p>
+              <div className="pagina-acciones">
+                <button type="button" className="btn btn-primary" onClick={conectar}><Icono n="mas" size={16} /> {usb ? 'Cambiar impresora' : 'Conectar impresora USB'}</button>
+                {usb && <button type="button" className="btn btn-danger" onClick={() => olvidarImpresora().then(() => setUsb(null))}>Olvidar</button>}
+              </div>
+              <small className="muted">Imprime al instante, sin diálogo. En Windows la impresora necesita el controlador WinUSB (se instala una vez con Zadig).</small>
+            </>
+          )}
+          <label className="check"><input type="checkbox" name="cortar" checked={a.cortar} onChange={cambiar} /> Cortar el papel al terminar (si tu impresora tiene cortador)</label>
+          <label className="check"><input type="checkbox" name="cajon" checked={a.cajon} onChange={cambiar} /> Abrir el cajón de dinero al cobrar</label>
+          <label className="check"><input type="checkbox" name="acentos" checked={a.acentos} onChange={cambiar} /> Imprimir acentos y ñ (desmárcalo si salen símbolos raros)</label>
+        </section>
+      ) : (
+        <small className="muted">Usa la impresora predeterminada de Windows con el diálogo de impresión: elige la impresora térmica, márgenes “Ninguno” y sin encabezados ni pies de página.</small>
+      )}
+
       <label className="check"><input type="checkbox" name="auto" checked={a.auto} onChange={cambiar} /> Imprimir el ticket automáticamente al cobrar</label>
       <div className="form-2">
         <label className="campo"><span>Ancho del papel</span>
@@ -220,7 +266,6 @@ function Impresora({ restaurante, onCerrar }) {
       <label className="campo"><span>Mensaje al pie</span>
         <input name="pie" value={a.pie} maxLength={80} onChange={cambiar} /></label>
       <label className="check"><input type="checkbox" name="fiscal" checked={a.fiscal} onChange={cambiar} /> Leyenda “no es comprobante fiscal”</label>
-      <small className="muted">En el diálogo de impresión elige la impresora térmica, márgenes “Ninguno” y desactiva encabezados y pies de página. Para imprimir sin diálogo, abre el navegador con la opción --kiosk-printing.</small>
     </Modal>
   );
 }
@@ -235,6 +280,7 @@ export default function Caja() {
   );
   const [cobrando, setCobrando] = useState(null);
   const [impresora, setImpresora] = useState(false);
+  const [corte, setCorte] = useState(false);
   // Cobros hechos sin internet (aún sin confirmar por el servidor): id → { base, pagos }
   const [local, setLocal] = useState({});
 
@@ -263,12 +309,15 @@ export default function Caja() {
       avisar.ok(saldo > 0 ? `Pago parcial registrado. Saldo: ${dinero(saldo / 100)}` : `Mesa ${resultado.mesa?.numero} cobrada`);
       recargar(true);
     }
-    if (leerAjustes().auto) imprimirTicket({ restaurante, comanda: { ...original, ...resultado }, cajero: usuario.nombre, tipo: 'pago' });
+    if (leerAjustes().auto) {
+      imprimirTicket({ restaurante, comanda: { ...original, ...resultado }, cajero: usuario.nombre, tipo: 'pago' })
+        .catch((e) => avisar.error(`No se imprimió el ticket: ${e.message}`));
+    }
   };
 
   const reimprimir = () => {
     const t = ultimoTicket();
-    if (t) imprimirTicket(t); else avisar.error('Aún no hay tickets impresos en este equipo');
+    if (t) imprimirTicket(t).catch((e) => avisar.error(e.message)); else avisar.error('Aún no hay tickets impresos en este equipo');
   };
 
   return (
@@ -278,6 +327,7 @@ export default function Caja() {
           {lista.length} {lista.length === 1 ? 'cuenta' : 'cuentas'} por cobrar · <b className="num">{dinero(porCobrar / 100)}</b>
         </p>
         <div className="pagina-acciones">
+          <button className="btn btn-primary" onClick={() => setCorte(true)}><Icono n="caja" /> Corte de caja</button>
           <button className="btn" onClick={reimprimir}><Icono n="ticket" /> Reimprimir último</button>
           <button className="btn" onClick={() => setImpresora(true)}><Icono n="editar" /> Impresora</button>
         </div>
@@ -308,7 +358,7 @@ export default function Caja() {
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn" title="Imprimir la cuenta para llevarla a la mesa"
-                    onClick={() => imprimirTicket({ restaurante, comanda: c, tipo: 'cuenta' })}>
+                    onClick={() => imprimirTicket({ restaurante, comanda: c, tipo: 'cuenta' }).catch((e) => avisar.error(e.message))}>
                     <Icono n="ticket" /> Cuenta
                   </button>
                   <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => setCobrando(c)}>
@@ -322,6 +372,7 @@ export default function Caja() {
       </EstadoVista>
 
       {cobrando && <Cobro comanda={cobrando} onCerrar={() => setCobrando(null)} onCobrado={cobrado} />}
+      {corte && <CorteCaja onCerrar={() => setCorte(false)} />}
       {impresora && <Impresora restaurante={restaurante} onCerrar={() => setImpresora(false)} />}
     </>
   );

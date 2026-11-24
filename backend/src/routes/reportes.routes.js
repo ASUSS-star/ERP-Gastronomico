@@ -8,5 +8,7 @@ const { ROLES } = require('../constants');
 
 const router = Router();
 router.get('/resumen', autenticar, permitirRoles(ROLES.ADMIN, ROLES.CAJERO), validar({ query: v.rango }), ctrl.resumen);
+// Corte de caja: ventas, pagos por método y platillos vendidos en el periodo (por defecto, el día de hoy)
+router.get('/corte', autenticar, permitirRoles(ROLES.ADMIN, ROLES.CAJERO), validar({ query: v.rango }), ctrl.corte);
 
 module.exports = router;

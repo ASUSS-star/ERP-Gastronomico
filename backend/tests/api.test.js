@@ -365,4 +365,16 @@ describe('Inventario, menú y comandas', () => {
     expect(porMetodo).toEqual({ TARJETA: 51, EFECTIVO: 10.5 });
     expect((await api.get('/api/reportes/resumen').set(auth(ctx.mesero))).status).toBe(403);
   });
+
+  test('corte de caja del día: ventas, dinero por método y platillos vendidos', async () => {
+    const res = await api.get('/api/reportes/corte').set(auth(ctx.cajero));
+    expect(res.status).toBe(200);
+    const c = res.body.data;
+    expect(c.ventas.total).toBe(61.5);
+    expect(c.recibido).toBe(61.5);
+    expect(c.efectivoEsperado).toBe(10.5);
+    expect(c.platillos.reduce((s, p) => s + p.importe, 0)).toBe(61.5);
+    expect(c.comandas).toHaveLength(c.ventas.comandas);
+    expect((await api.get('/api/reportes/corte').set(auth(ctx.mesero))).status).toBe(403);
+  });
 });
